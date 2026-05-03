@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>MindCare</title>
+
+  <style>
+    body {
+      font-family: Arial;
+      background: linear-gradient(to right, #6a11cb, #2575fc);
+      color: white;
+      text-align: center;
+    }
+
+    .box {
+      margin-top: 100px;
+    }
+
+    button {
+      padding: 12px 20px;
+      border-radius: 8px;
+      margin: 10px;
+      cursor: pointer;
+      font-size: 16px;
+      border: none;
+    }
+
+    button:hover {
+      background: white;
+      color: black;
+    }
+
+    #questionBox, #resultBox {
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+
+<!-- START -->
+<div class="box" id="startBox">
+  <h1>Welcome to MindCare</h1>
+  <button onclick="startQuick()">Quick Check</button>
+  <button onclick="startDeep()">Deep Assessment</button>
+</div>
+
+<!-- QUESTION -->
+<div class="box" id="questionBox">
+  <p id="progress"></p>
+  <h2 id="questionText"></h2>
+  <div id="options"></div>
+</div>
+
+<!-- RESULT -->
+<div class="box" id="resultBox"></div>
+
+
+
+<div class="box" id="gameBox" style="display:none">
+  <h2>Relax & Recover</h2>
+
+  <!-- MENU -->
+  <div id="gameMenu">
+    <button onclick="startBubble()">Bubble Pop</button>
+    <button onclick="startBreathing()">Breathing Exercise</button>
+    <button onclick="startSound('rain')">Rain Sound</button>
+    <button onclick="startSound('calm')">Calm Music</button>
+  </div>
+
+  <!-- GAME AREA -->
+  <div id="gameArea" style="position:relative; height:300px; margin-top:20px;"></div>
+
+  <!-- SCORE -->
+  <p id="scoreText"></p>
+
+  <br>
+  <button onclick="exitGame()">Back</button>
+</div>
+
+
+
+
+
+<script>
+
+/* ================= STATE ================= */
+let userProfile = { stress: 0, anxiety: 0, sleep: 0 };
+let asked = [];
+let mode = "";
+let currentNode = null;
+let maxQ = 6;
+let questionCount = 0;
+let maxQuestions = 12;   // you can set 10–12
+
+/* ================= QUESTION BANK ================= */
+const questionBank = [
+  {
+    id: "q1",
+    text: "How are you feeling today?",
+    tags: ["stress"],
+    options: [
+      { text: "Good", effect: { stress: -1 } },
+      { text: "Okay", effect: { stress: 1 } },
+      { text: "Bad", effect: { stress: 2 }, next: "q2" }
+    ]
+  },
+  {
+    id: "q2",
+    text: "Is your workload heavy?",
+    tags: ["stress"],
+    options: [
+      { text: "Yes", effect: { stress: 2 } },
+      { text: "No", effect: { stress: 0 } }
+    ]
+  },
+  {
+    id: "q3",
+    text: "Do you overthink things?",
+    tags: ["anxiety"],
+    options: [
+      { text: "No", effect: { anxiety: -1 } },
+      { text: "Sometimes", effect: { anxiety: 1 } },
+      { text: "Yes", effect: { anxiety: 2 } }
+    ]
+  },
+  {
+    id: "q4",
+    text: "How is your sleep quality?",
+    tags: ["sleep"],
+    options: [
+      { text: "Good", effect: { sleep: 1 } },
+      { text: "Average", effect: { sleep: 0 } },
+      { text: "Poor", effect: { sleep: -2 } }
+    ]
+  },
+  {
+    id: "q5",
+    text: "Do you feel low energy?",
+    tags: ["stress"],
+    options: [
+      { text: "No", effect: { stress: -1 } },
+      { text: "Sometimes", effect: { stress: 1 } },
+      { text: "Yes", effect: { stress: 2 } }
+    ]
+  }
+];
+
+/* ================= DEEP TREE ================= */
+const deepTree = {
+  text: "What affects you most?",
+  options: [
+    { text: "Stress", next: "stress_1" },
+    { text: "Anxiety", next: "anxiety_1" },
+    { text: "Sleep", next: "sleep_1" }
+  ]
+};
+
+const deepNodes = {
+
+  /* ========= STRESS (10) ========= */
+  stress_1: {
+    text: "Do you feel your workload is too heavy?",
+    options: [
+      { text: "Often", effect: { stress: 2 }, next: "stress_2" },
+      { text: "Sometimes", effect: { stress: 1 }, next: "stress_2" },
+      { text: "No", effect: { stress: 0 }, next: "stress_2" }
+    ]
+  },
+  stress_2: {
+    text: "Do you feel physically tense (neck, headache)?",
+    options: [
+      { text: "Often", effect: { stress: 2 }, next: "stress_3" },
+      { text: "Sometimes", effect: { stress: 1 }, next: "stress_3" },
+      { text: "No", effect: { stress: 0 }, next: "stress_3" }
+    ]
+  },
+  stress_3: {
+    text: "Do you get irritated easily?",
+    options: [
+      { text: "Often", effect: { stress: 2 }, next: "stress_4" },
+      { text: "Sometimes", effect: { stress: 1 }, next: "stress_4" },
+      { text: "No", effect: { stress: 0 }, next: "stress_4" }
+    ]
+  },
+  stress_4: {
+    text: "Do you skip breaks during work?",
+    options: [
+      { text: "Yes", effect: { stress: 2 }, next: "stress_5" },
+      { text: "Sometimes", effect: { stress: 1 }, next: "stress_5" },
+      { text: "No", effect: { stress: 0 }, next: "stress_5" }
+    ]
+  },
+  stress_5: {
+    text: "Do you feel rushed most of the day?",
+    options: [
+      { text: "Yes", effect: { stress: 2 }, next: "stress_6" },
+      { text: "Sometimes", effect: { stress: 1 }, next: "stress_6" },
+      { text: "No", effect: { stress: 0 }, next: "stress_6" }
+    ]
+  },
+  stress_6: {
+    text: "Do you rely on caffeine to stay active?",
+    options: [
+      { text: "Daily", effect: { stress: 2 }, next: "stress_7" },
+      { text: "Sometimes", effect: { stress: 1 }, next: "stress_7" },
+      { text: "No", effect: { stress: 0 }, next: "stress_7" }
+    ]
+  },
+  stress_7: {
+    text: "Has your appetite changed recently?",
+    options: [
+      { text: "Yes", effect: { stress: 2 }, next: "stress_8" },
+      { text: "Slightly", effect: { stress: 1 }, next: "stress_8" },
+      { text: "No", effect: { stress: 0 }, next: "stress_8" }
+    ]
+  },
+  stress_8: {
+    text: "Do you feel mentally exhausted?",
+    options: [
+      { text: "Often", effect: { stress: 2 }, next: "stress_9" },
+      { text: "Sometimes", effect: { stress: 1 }, next: "stress_9" },
+      { text: "No", effect: { stress: 0 }, next: "stress_9" }
+    ]
+  },
+  stress_9: {
+    text: "Do you struggle to relax even during free time?",
+    options: [
+      { text: "Yes", effect: { stress: 2 }, next: "stress_10" },
+      { text: "Sometimes", effect: { stress: 1 }, next: "stress_10" },
+      { text: "No", effect: { stress: 0 }, next: "stress_10" }
+    ]
+  },
+  stress_10: {
+    text: "Do you feel overwhelmed frequently?",
+    options: [
+      { text: "Often", effect: { stress: 2 }, next: "anxiety_1" },
+      { text: "Sometimes", effect: { stress: 1 }, next: "anxiety_1" },
+      { text: "No", effect: { stress: 0 }, next: "anxiety_1" }
+    ]
+  },
+
+  /* ========= ANXIETY (10) ========= */
+  anxiety_1: {
+    text: "Do you overthink worst-case scenarios?",
+    options: [
+      { text: "Often", effect: { anxiety: 2 }, next: "anxiety_2" },
+      { text: "Sometimes", effect: { anxiety: 1 }, next: "anxiety_2" },
+      { text: "No", effect: { anxiety: 0 }, next: "anxiety_2" }
+    ]
+  },
+  anxiety_2: {
+    text: "Do you feel sudden panic or racing heart?",
+    options: [
+      { text: "Often", effect: { anxiety: 2 }, next: "anxiety_3" },
+      { text: "Sometimes", effect: { anxiety: 1 }, next: "anxiety_3" },
+      { text: "No", effect: { anxiety: 0 }, next: "anxiety_3" }
+    ]
+  },
+  anxiety_3: {
+    text: "Do you have trouble focusing due to thoughts?",
+    options: [
+      { text: "Often", effect: { anxiety: 2 }, next: "anxiety_4" },
+      { text: "Sometimes", effect: { anxiety: 1 }, next: "anxiety_4" },
+      { text: "No", effect: { anxiety: 0 }, next: "anxiety_4" }
+    ]
+  },
+  anxiety_4: {
+    text: "Do you avoid situations due to fear?",
+    options: [
+      { text: "Often", effect: { anxiety: 2 }, next: "anxiety_5" },
+      { text: "Sometimes", effect: { anxiety: 1 }, next: "anxiety_5" },
+      { text: "No", effect: { anxiety: 0 }, next: "anxiety_5" }
+    ]
+  },
+  anxiety_5: {
+    text: "Do you feel something bad will happen?",
+    options: [
+      { text: "Often", effect: { anxiety: 2 }, next: "anxiety_6" },
+      { text: "Sometimes", effect: { anxiety: 1 }, next: "anxiety_6" },
+      { text: "No", effect: { anxiety: 0 }, next: "anxiety_6" }
+    ]
+  },
+  anxiety_6: {
+    text: "Do you need reassurance often?",
+    options: [
+      { text: "Often", effect: { anxiety: 2 }, next: "anxiety_7" },
+      { text: "Sometimes", effect: { anxiety: 1 }, next: "anxiety_7" },
+      { text: "No", effect: { anxiety: 0 }, next: "anxiety_7" }
+    ]
+  },
+  anxiety_7: {
+    text: "Do you feel restless or uneasy?",
+    options: [
+      { text: "Often", effect: { anxiety: 2 }, next: "anxiety_8" },
+      { text: "Sometimes", effect: { anxiety: 1 }, next: "anxiety_8" },
+      { text: "No", effect: { anxiety: 0 }, next: "anxiety_8" }
+    ]
+  },
+  anxiety_8: {
+    text: "Do thoughts disturb your sleep?",
+    options: [
+      { text: "Often", effect: { anxiety: 2 }, next: "anxiety_9" },
+      { text: "Sometimes", effect: { anxiety: 1 }, next: "anxiety_9" },
+      { text: "No", effect: { anxiety: 0 }, next: "anxiety_9" }
+    ]
+  },
+  anxiety_9: {
+    text: "Do you feel mentally exhausted due to thinking?",
+    options: [
+      { text: "Yes", effect: { anxiety: 2 }, next: "anxiety_10" },
+      { text: "Sometimes", effect: { anxiety: 1 }, next: "anxiety_10" },
+      { text: "No", effect: { anxiety: 0 }, next: "anxiety_10" }
+    ]
+  },
+  anxiety_10: {
+    text: "Do you struggle to control your thoughts?",
+    options: [
+      { text: "Often", effect: { anxiety: 2 }, next: "sleep_1" },
+      { text: "Sometimes", effect: { anxiety: 1 }, next: "sleep_1" },
+      { text: "No", effect: { anxiety: 0 }, next: "sleep_1" }
+    ]
+  },
+
+  /* ========= SLEEP (10) ========= */
+  sleep_1: {
+    text: "Do you take long to fall asleep?",
+    options: [
+      { text: "Yes", effect: { sleep: -2 }, next: "sleep_2" },
+      { text: "No", effect: { sleep: 0 }, next: "sleep_2" }
+    ]
+  },
+  sleep_2: {
+    text: "Do you wake up during the night?",
+    options: [
+      { text: "Often", effect: { sleep: -2 }, next: "sleep_3" },
+      { text: "Sometimes", effect: { sleep: -1 }, next: "sleep_3" },
+      { text: "No", effect: { sleep: 0 }, next: "sleep_3" }
+    ]
+  },
+  sleep_3: {
+    text: "Do you use your phone before sleep?",
+    options: [
+      { text: "Yes", effect: { sleep: -2 }, next: "sleep_4" },
+      { text: "Sometimes", effect: { sleep: -1 }, next: "sleep_4" },
+      { text: "No", effect: { sleep: 0 }, next: "sleep_4" }
+    ]
+  },
+  sleep_4: {
+    text: "Is your sleep schedule irregular?",
+    options: [
+      { text: "Yes", effect: { sleep: -2 }, next: "sleep_5" },
+      { text: "No", effect: { sleep: 0 }, next: "sleep_5" }
+    ]
+  },
+  sleep_5: {
+    text: "Do you feel tired even after sleep?",
+    options: [
+      { text: "Often", effect: { sleep: -2 }, next: "sleep_6" },
+      { text: "Sometimes", effect: { sleep: -1 }, next: "sleep_6" },
+      { text: "No", effect: { sleep: 0 }, next: "sleep_6" }
+    ]
+  },
+  sleep_6: {
+    text: "Do you consume caffeine before bed?",
+    options: [
+      { text: "Yes", effect: { sleep: -2 }, next: "sleep_7" },
+      { text: "No", effect: { sleep: 0 }, next: "sleep_7" }
+    ]
+  },
+  sleep_7: {
+    text: "Do thoughts keep you awake?",
+    options: [
+      { text: "Often", effect: { sleep: -2 }, next: "sleep_8" },
+      { text: "Sometimes", effect: { sleep: -1 }, next: "sleep_8" },
+      { text: "No", effect: { sleep: 0 }, next: "sleep_8" }
+    ]
+  },
+  sleep_8: {
+    text: "Do you nap late in the day?",
+    options: [
+      { text: "Yes", effect: { sleep: -2 }, next: "sleep_9" },
+      { text: "No", effect: { sleep: 0 }, next: "sleep_9" }
+    ]
+  },
+  sleep_9: {
+    text: "Do you snore or have breathing issues?",
+    options: [
+      { text: "Yes", effect: { sleep: -2 }, next: "sleep_10" },
+      { text: "No", effect: { sleep: 0 }, next: "sleep_10" }
+    ]
+  },
+  sleep_10: {
+    text: "Do you wake up feeling refreshed?",
+    options: [
+      { text: "No", effect: { sleep: -2 } },
+      { text: "Yes", effect: { sleep: 0 } }
+    ]
+  }
+};
+
+/* ================= START FUNCTIONS ================= */
+function startQuick() {
+  mode = "quick";
+
+  resetAll();
+
+  // 🔥 reset deep counter so it doesn't affect quick
+  questionCount = 0;
+
+  nextQuestion();   // start random questions
+}
+
+function startDeep() {
+  mode = "deep";
+  resetAll();
+  currentNode = deepTree;
+  render(currentNode, "Deep Mode");
+}
+
+/* ================= RESET ================= */
+function resetAll() {
+  userProfile = { stress: 0, anxiety: 0, sleep: 0 };
+  asked = [];
+
+  document.getElementById("startBox").style.display = "none";
+  document.getElementById("resultBox").style.display = "none";
+  document.getElementById("questionBox").style.display = "block";
+}
+
+/* ================= QUICK ENGINE ================= */
+function nextQuestion() {
+
+  // 🔥 LIMIT QUICK QUESTIONS
+  if (asked.length >= maxQ) {
+    showResult();
+    return;
+  }
+
+  let available = questionBank.filter(q => !asked.includes(q.id));
+
+  if (available.length === 0) {
+    showResult();
+    return;
+  }
+
+  let q = available[Math.floor(Math.random() * available.length)];
+
+  asked.push(q.id);
+  render(q, `Question ${asked.length} of ${maxQ}`);
+}
+
+
+/* ================= RENDER ================= */
+function render(q, progressText = "") {
+  document.getElementById("questionText").innerText = q.text;
+  document.getElementById("progress").innerText = progressText;
+
+  let btns = "";
+  q.options.forEach((opt, i) => {
+    btns += `<button onclick="handleOption(${i})">${opt.text}</button>`;
+  });
+
+  window.currentOptions = q.options;
+  document.getElementById("options").innerHTML = btns;
+}
+
+/* ================= CLICK ================= */
+function handleOption(i) {
+  let opt = window.currentOptions[i];
+
+  if (!opt) return;
+
+  if (opt.effect) {
+    for (let k in opt.effect) {
+      userProfile[k] += opt.effect[k];
+    }
+  }
+
+  // 🔥 DIFFERENT LOGIC FOR MODES
+  if (mode === "deep") {
+
+    questionCount++;
+
+    if (questionCount >= maxQuestions) {
+      showResult();
+      return;
+    }
+
+    if (opt.next && deepNodes[opt.next]) {
+      currentNode = deepNodes[opt.next];
+      render(currentNode, "Deep Assessment");
+    } else {
+      showResult();
+    }
+
+  } else if (mode === "quick") {
+
+    // ❗ DO NOT USE questionCount HERE
+    nextQuestion();   // your quick random function
+
+  }
+}
+
+/* ================= RESULT ================= */
+function showResult() {
+  document.getElementById("questionBox").style.display = "none";
+  document.getElementById("resultBox").style.display = "block";
+
+  let stress = userProfile.stress;
+  let anxiety = userProfile.anxiety;
+  let sleep = -userProfile.sleep;
+
+  // Normalize
+  let totalQuestions = questionCount || 1; // safety
+  let normStress = stress / totalQuestions;
+  let normAnxiety = anxiety / totalQuestions;
+  let normSleep = sleep / totalQuestions;
+
+  let max = Math.max(normStress, normAnxiety, normSleep);
+
+  let result = "";
+  let solution = "";
+  let gameBtn = ""; // 🔥 NEW
+
+  /* ===== SEVERE ===== */
+  if (max >= 1.5) {
+    if (max === normAnxiety) {
+      result = "High Anxiety";
+      solution = "Practice breathing, reduce overthinking triggers, and consider talking to someone.";
+    }
+    else if (max === normStress) {
+      result = "Severe Stress";
+      solution = "Reduce workload, take breaks, and prioritize recovery.";
+    }
+    else {
+      result = "Severe Sleep Issue";
+      solution = "Fix sleep schedule, avoid screens, and improve sleep hygiene.";
+    }
+
+    // 🔥 SHOW GAME BUTTON ONLY IN SEVERE
+    gameBtn = `<button onclick="startGame()">Play Relaxing Game</button>`;
+  }
+
+  /* ===== MODERATE ===== */
+  else if (max >= 0.8) {
+    if (max === normAnxiety) {
+      result = "Overthinking Pattern";
+      solution = "Try journaling and logical thinking techniques.";
+    }
+    else if (max === normStress) {
+      result = "Moderate Stress";
+      solution = "Take breaks and manage workload.";
+    }
+    else {
+      result = "Sleep Disturbance";
+      solution = "Improve bedtime routine.";
+    }
+  }
+
+  /* ===== LOW ===== */
+  else {
+    result = "Balanced Mind";
+    solution = "Keep maintaining your current habits.";
+  }
+
+  // 🔥 FINAL OUTPUT (updated)
+  document.getElementById("resultBox").innerHTML = `
+    <h2>${result}</h2>
+    <p>${solution}</p>
+
+    ${gameBtn}
+
+    <br><br>
+    <button onclick="location.reload()">Restart</button>
+  `;
+}
+
+
+function getNextCategory() {
+  if (userProfile.stress > userProfile.anxiety && userProfile.stress > -userProfile.sleep) {
+    return "stress";
+  }
+  else if (userProfile.anxiety > -userProfile.sleep) {
+    return "anxiety";
+  }
+  else {
+    return "sleep";
+  }
+}
+
+/* start game */
+function startGame() {
+  document.getElementById("resultBox").style.display = "none";
+  document.getElementById("gameBox").style.display = "block";
+
+  document.getElementById("gameArea").innerHTML = "";
+  document.getElementById("scoreText").innerText = "";
+}
+
+
+
+/* bubble game */
+
+let score = 0;
+
+function startBubble() {
+  let area = document.getElementById("gameArea");
+  area.innerHTML = "";
+  score = 0;
+
+  document.getElementById("scoreText").innerText = "Score: 0";
+
+  for (let i = 0; i < 20; i++) {
+    let bubble = document.createElement("div");
+
+    bubble.style.width = "40px";
+    bubble.style.height = "40px";
+    bubble.style.borderRadius = "50%";
+    bubble.style.background = "rgba(255,255,255,0.7)";
+    bubble.style.position = "absolute";
+    bubble.style.left = Math.random() * 90 + "%";
+    bubble.style.top = Math.random() * 80 + "%";
+    bubble.style.cursor = "pointer";
+
+    bubble.onclick = function () {
+      bubble.remove();
+      score++;
+      document.getElementById("scoreText").innerText = "Score: " + score;
+    };
+
+    area.appendChild(bubble);
+  }
+}
+
+/* Breathing */
+function startBreathing() {
+  let area = document.getElementById("gameArea");
+  area.innerHTML = "";
+
+  let circle = document.createElement("div");
+
+  circle.style.width = "100px";
+  circle.style.height = "100px";
+  circle.style.borderRadius = "50%";
+  circle.style.background = "rgba(255,255,255,0.5)";
+  circle.style.margin = "auto";
+  circle.style.transition = "all 4s ease";
+
+  area.appendChild(circle);
+
+  let text = document.createElement("h3");
+  text.innerText = "Breathe In";
+  area.appendChild(text);
+
+  let inhale = true;
+
+  setInterval(() => {
+    if (inhale) {
+      circle.style.transform = "scale(2)";
+      text.innerText = "Breathe In";
+    } else {
+      circle.style.transform = "scale(1)";
+      text.innerText = "Breathe Out";
+    }
+    inhale = !inhale;
+  }, 4000);
+}
+
+/* Sounds */
+let audio = null;
+
+function startSound(type) {
+  let area = document.getElementById("gameArea");
+  area.innerHTML = "<h3>Playing...</h3>";
+
+  if (audio) audio.pause();
+
+  if (type === "rain") {
+    audio = new Audio("https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3");
+  } else {
+    audio = new Audio("https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3");
+  }
+
+  audio.loop = true;
+  audio.play();
+}
+
+/* Exit */
+function exitGame() {
+  document.getElementById("gameBox").style.display = "none";
+  document.getElementById("resultBox").style.display = "block";
+
+  if (audio) audio.pause();
+}
+
+
+
+
+
+
+
+</script>
+
+</body>
+</html>
