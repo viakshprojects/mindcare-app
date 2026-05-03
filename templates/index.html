@@ -66,8 +66,27 @@ body {
 
 /* keep functionality */
 #questionBox, #resultBox {
-  display: none;
-}
+    display: none;
+  }
+
+  /* 👉 PASTE HERE */
+  .option-btn {
+    padding: 12px 20px;
+    margin: 10px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    background: white;
+    font-size: 16px;
+    transition: all 0.3s ease;
+  }
+
+  .option-btn:hover {
+    transform: scale(1.1);
+    background: black;
+    color: white;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+  }
 </style>
 </head>
 
@@ -510,7 +529,7 @@ function render(q, progressText = "") {
 
   let btns = "";
   q.options.forEach((opt, i) => {
-    btns += `<button onclick="handleOption(${i})">${opt.text}</button>`;
+    btns += `<button class="option-btn" onclick="handleOption(${i})">${opt.text}</button>`;
   });
 
   window.currentOptions = q.options;
